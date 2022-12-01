@@ -15,8 +15,8 @@ import (
 )
 
 type Client struct {
-	url        string
-	httpClient http.Client
+	URL        string
+	HttpClient http.Client
 	nextId     int
 }
 
@@ -51,9 +51,9 @@ type rpcError struct {
 
 func New(url string) *Client {
 	rv := &Client{
-		url:    url,
+		URL:    url,
 		nextId: 1,
-		httpClient: http.Client{
+		HttpClient: http.Client{
 			Transport: &http.Transport{
 				MaxIdleConns:       10,
 				IdleConnTimeout:    30 * time.Second,
@@ -87,14 +87,14 @@ func (c *Client) Run(ctx context.Context, events []types.FluentBitLog, filter st
 		return nil, err
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.url, bytes.NewReader(reqBody))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.URL, bytes.NewReader(reqBody))
 	if err != nil {
 		return nil, err
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	httpRes, err := c.httpClient.Do(httpReq)
+	httpRes, err := c.HttpClient.Do(httpReq)
 	if err != nil {
 		return nil, err
 	}
