@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/calyptia/api/types"
@@ -31,12 +32,7 @@ type request struct {
 	Params         params `json:"params"`
 }
 
-type LogResult struct {
-	Log   types.FluentBitLog
-	Error string
-}
-
-type RawLogResult struct {
+type rawLogResult struct {
 	Result any    `json:"result,omitempty"`
 	Error  string `json:"error,omitempty"`
 }
@@ -44,7 +40,7 @@ type RawLogResult struct {
 type response struct {
 	JsonRpcVersion string         `json:"jsonrpc"`
 	ID             int            `json:"id"`
-	Result         []RawLogResult `json:"result,omitempty"`
+	Result         []rawLogResult `json:"result,omitempty"`
 	Error          *rpcError      `json:"error,omitempty"`
 }
 
@@ -69,7 +65,7 @@ func New(url string) *Client {
 	return rv
 }
 
-func (c *Client) Run(ctx context.Context, events []types.FluentBitLog, filter string) ([]LogResult, error) {
+func (c *Client) Run(ctx context.Context, events []types.FluentBitLog, filter string) ([]types.FluentBitLog, error) {
 	id := c.nextId
 	c.nextId += 1
 
@@ -131,10 +127,11 @@ func (c *Client) Run(ctx context.Context, events []types.FluentBitLog, filter st
 		return nil, fmt.Errorf("RPC call error: %v (%v)", response.Error.Code, response.Error.Message)
 	}
 
-	rv := []LogResult{}
+	rv := []types.FluentBitLog{}
+	var errors strings.Builder
 	for i, r := range response.Result {
 		if r.Error != "" {
-			rv = append(rv, LogResult{Error: r.Error})
+			errors.WriteString(fmt.Sprintf("%v\n", r.Error))
 			continue
 		}
 
@@ -151,7 +148,7 @@ func (c *Client) Run(ctx context.Context, events []types.FluentBitLog, filter st
 
 		if code == 0 {
 			// record not modified, use the original
-			rv = append(rv, LogResult{Log: events[i]})
+			rv = append(rv, events[i])
 			continue
 		}
 
@@ -169,18 +166,22 @@ func (c *Client) Run(ctx context.Context, events []types.FluentBitLog, filter st
 			items := attrs.([]any)
 			for _, r := range items {
 				item := r.(map[string]any)
-				rv = append(rv, LogResult{Log: types.FluentBitLog{
+				rv = append(rv, types.FluentBitLog{
 					Timestamp: timestamp,
 					Attrs:     item,
-				}})
+				})
 			}
 			continue
 		}
 
-		rv = append(rv, LogResult{Log: types.FluentBitLog{
+		rv = append(rv, types.FluentBitLog{
 			Timestamp: timestamp,
 			Attrs:     resultItems[2].(map[string]any),
-		}})
+		})
+	}
+
+	if errors.Len() > 0 {
+		return nil, fmt.Errorf("Errors were raised processing one or more records:\n%v", errors.String())
 	}
 
 	return rv, nil

@@ -35,10 +35,10 @@ func TestSimpleProcessing(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	assert.Equal(t, []luasandbox.LogResult{
-		{Log: types.FluentBitLog{Timestamp: 11.5, Attrs: types.FluentBitLogAttrs{"msg": "record one", "processed": "one"}}},
-		{Log: types.FluentBitLog{Timestamp: 12.5, Attrs: types.FluentBitLogAttrs{"msg": "record two", "processed": "two"}}},
-		{Log: types.FluentBitLog{Timestamp: 13.5, Attrs: types.FluentBitLogAttrs{"msg": "record three", "processed": "three"}}},
+	assert.Equal(t, []types.FluentBitLog{
+		{Timestamp: 11.5, Attrs: types.FluentBitLogAttrs{"msg": "record one", "processed": "one"}},
+		{Timestamp: 12.5, Attrs: types.FluentBitLogAttrs{"msg": "record two", "processed": "two"}},
+		{Timestamp: 13.5, Attrs: types.FluentBitLogAttrs{"msg": "record three", "processed": "three"}},
 	}, result)
 }
 
@@ -62,9 +62,9 @@ func TestDropRecord(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-  assert.Equal(t, []luasandbox.LogResult{
-		{Log: types.FluentBitLog{Timestamp: 0, Attrs: types.FluentBitLogAttrs{"msg": "record one", "processed": "one"}}},
-		{Log: types.FluentBitLog{Timestamp: 0, Attrs: types.FluentBitLogAttrs{"msg": "record three", "processed": "three"}}},
+	assert.Equal(t, []types.FluentBitLog{
+		{Timestamp: 0, Attrs: types.FluentBitLogAttrs{"msg": "record one", "processed": "one"}},
+		{Timestamp: 0, Attrs: types.FluentBitLogAttrs{"msg": "record three", "processed": "three"}},
 	}, result)
 }
 
@@ -92,10 +92,10 @@ func TestIgnoreTimestamp(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	assert.Equal(t, []luasandbox.LogResult{
-		{Log: types.FluentBitLog{Timestamp: 0, Attrs: types.FluentBitLogAttrs{"msg": "record one", "processed": "one"}}},
-		{Log: types.FluentBitLog{Timestamp: 12.5, Attrs: types.FluentBitLogAttrs{"msg": "record two", "processed": "two"}}},
-		{Log: types.FluentBitLog{Timestamp: 13.5, Attrs: types.FluentBitLogAttrs{"msg": "record three", "processed": "three"}}},
+	assert.Equal(t, []types.FluentBitLog{
+		{Timestamp: 0, Attrs: types.FluentBitLogAttrs{"msg": "record one", "processed": "one"}},
+		{Timestamp: 12.5, Attrs: types.FluentBitLogAttrs{"msg": "record two", "processed": "two"}},
+		{Timestamp: 13.5, Attrs: types.FluentBitLogAttrs{"msg": "record three", "processed": "three"}},
 	}, result)
 }
 
@@ -123,10 +123,10 @@ func TestIgnoreProcessing(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	assert.Equal(t, []luasandbox.LogResult{
-		{Log: types.FluentBitLog{Timestamp: 11.5, Attrs: types.FluentBitLogAttrs{"msg": "record one", "processed": "one"}}},
-		{Log: types.FluentBitLog{Timestamp: 0, Attrs: types.FluentBitLogAttrs{"log": "two"}}},
-		{Log: types.FluentBitLog{Timestamp: 0, Attrs: types.FluentBitLogAttrs{"log": "three"}}},
+	assert.Equal(t, []types.FluentBitLog{
+		{Timestamp: 11.5, Attrs: types.FluentBitLogAttrs{"msg": "record one", "processed": "one"}},
+		{Timestamp: 0, Attrs: types.FluentBitLogAttrs{"log": "two"}},
+		{Timestamp: 0, Attrs: types.FluentBitLogAttrs{"log": "three"}},
 	}, result)
 }
 
@@ -159,14 +159,14 @@ func TestSplit(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	assert.Equal(t, []luasandbox.LogResult{
-		{Log: types.FluentBitLog{Timestamp: 11.5, Attrs: types.FluentBitLogAttrs{"log": "one.1"}}},
-		{Log: types.FluentBitLog{Timestamp: 11.5, Attrs: types.FluentBitLogAttrs{"log": "one.2"}}},
-		{Log: types.FluentBitLog{Timestamp: 11.5, Attrs: types.FluentBitLogAttrs{"log": "one.3"}}},
-		{Log: types.FluentBitLog{Timestamp: 12.5, Attrs: types.FluentBitLogAttrs{"msg": "record two", "processed": "two"}}},
-		{Log: types.FluentBitLog{Timestamp: 13.5, Attrs: types.FluentBitLogAttrs{"log": "three.1"}}},
-		{Log: types.FluentBitLog{Timestamp: 13.5, Attrs: types.FluentBitLogAttrs{"log": "three.2"}}},
-		{Log: types.FluentBitLog{Timestamp: 13.5, Attrs: types.FluentBitLogAttrs{"log": "three.3"}}},
+	assert.Equal(t, []types.FluentBitLog{
+		{Timestamp: 11.5, Attrs: types.FluentBitLogAttrs{"log": "one.1"}},
+		{Timestamp: 11.5, Attrs: types.FluentBitLogAttrs{"log": "one.2"}},
+		{Timestamp: 11.5, Attrs: types.FluentBitLogAttrs{"log": "one.3"}},
+		{Timestamp: 12.5, Attrs: types.FluentBitLogAttrs{"msg": "record two", "processed": "two"}},
+		{Timestamp: 13.5, Attrs: types.FluentBitLogAttrs{"log": "three.1"}},
+		{Timestamp: 13.5, Attrs: types.FluentBitLogAttrs{"log": "three.2"}},
+		{Timestamp: 13.5, Attrs: types.FluentBitLogAttrs{"log": "three.3"}},
 	}, result)
 }
 
@@ -209,14 +209,8 @@ func TestCallbackError(t *testing.T) {
     record.log = nil
     return code, i, record
   end`
-	result, err := client.Run(context.Background(), events, filter)
-
-	if err != nil {
-		t.Error(err)
-	}
-	assert.Equal(t, []luasandbox.LogResult{
-		{Error: "error processing event 1: [string \"fluentbit.lua\"]:6: error one"},
-		{Error: "error processing event 2: [string \"fluentbit.lua\"]:6: error two"},
-		{Log: types.FluentBitLog{Timestamp: 13.5, Attrs: types.FluentBitLogAttrs{"msg": "record three", "processed": "three"}}},
-	}, result)
+	_, err := client.Run(context.Background(), events, filter)
+	assert.EqualError(t, err, "Errors were raised processing one or more records:\n"+
+		"error processing event 1: [string \"fluentbit.lua\"]:6: error one\n"+
+		"error processing event 2: [string \"fluentbit.lua\"]:6: error two\n")
 }
