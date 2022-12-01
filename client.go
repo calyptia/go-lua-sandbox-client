@@ -2,6 +2,7 @@ package luasandbox
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -25,7 +26,7 @@ type params struct {
 
 type request struct {
 	JsonRpcVersion string `json:"jsonrpc"`
-	Id             int    `json:"id"`
+	ID             int    `json:"id"`
 	Method         string `json:"method"`
 	Params         params `json:"params"`
 }
@@ -42,7 +43,7 @@ type RawLogResult struct {
 
 type response struct {
 	JsonRpcVersion string         `json:"jsonrpc"`
-	Id             int            `json:"id"`
+	ID             int            `json:"id"`
 	Result         []RawLogResult `json:"result,omitempty"`
 	Error          *rpcError      `json:"error,omitempty"`
 }
@@ -68,7 +69,7 @@ func New(url string) *Client {
 	return rv
 }
 
-func (c *Client) Run(events []types.FluentBitLog, filter string) ([]LogResult, error) {
+func (c *Client) Run(ctx context.Context, events []types.FluentBitLog, filter string) ([]LogResult, error) {
 	id := c.nextId
 	c.nextId += 1
 
@@ -79,7 +80,7 @@ func (c *Client) Run(events []types.FluentBitLog, filter string) ([]LogResult, e
 
 	reqBody, err := json.Marshal(&request{
 		JsonRpcVersion: "2.0",
-		Id:             id,
+		ID:             id,
 		Method:         "run",
 		Params: params{
 			Events: eventAttrs,
@@ -90,7 +91,14 @@ func (c *Client) Run(events []types.FluentBitLog, filter string) ([]LogResult, e
 		return nil, err
 	}
 
-	httpRes, err := c.httpClient.Post(c.url, "application/json", bytes.NewReader(reqBody))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.url, bytes.NewReader(reqBody))
+	if err != nil {
+		return nil, err
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	httpRes, err := c.httpClient.Do(httpReq)
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +119,7 @@ func (c *Client) Run(events []types.FluentBitLog, filter string) ([]LogResult, e
 		return nil, fmt.Errorf("Failed to unmarshal json response: %v", string(resBody))
 	}
 
-	if response.Id != id {
+	if response.ID != id {
 		return nil, fmt.Errorf("Unexpected response id: %v", string(resBody))
 	}
 

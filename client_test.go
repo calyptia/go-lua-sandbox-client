@@ -1,6 +1,7 @@
 package luasandbox_test
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -52,7 +53,7 @@ func TestSimpleProcessing(t *testing.T) {
     record.log = nil
     return 1, i, record
   end`
-	result, err := client.Run(events, filter)
+	result, err := client.Run(context.Background(), events, filter)
 
 	if err != nil {
 		t.Error(err)
@@ -79,7 +80,7 @@ func TestDropRecord(t *testing.T) {
     record.log = nil
     return 1, ts, record
   end`
-	result, err := client.Run(events, filter)
+	result, err := client.Run(context.Background(), events, filter)
 
 	if err != nil {
 		t.Error(err)
@@ -109,7 +110,7 @@ func TestIgnoreTimestamp(t *testing.T) {
     record.log = nil
     return code, i, record
   end`
-	result, err := client.Run(events, filter)
+	result, err := client.Run(context.Background(), events, filter)
 
 	if err != nil {
 		t.Error(err)
@@ -140,7 +141,7 @@ func TestIgnoreProcessing(t *testing.T) {
     record.log = nil
     return code, i, record
   end`
-	result, err := client.Run(events, filter)
+	result, err := client.Run(context.Background(), events, filter)
 
 	if err != nil {
 		t.Error(err)
@@ -176,7 +177,7 @@ func TestSplit(t *testing.T) {
     record.log = nil
     return 1, i, record
   end`
-	result, err := client.Run(events, filter)
+	result, err := client.Run(context.Background(), events, filter)
 
 	if err != nil {
 		t.Error(err)
@@ -199,7 +200,7 @@ func TestScriptTimeout(t *testing.T) {
 	filter := `
   while true do
   end`
-	_, err := client.Run(events, filter)
+	_, err := client.Run(context.Background(), events, filter)
 	shouldError(t, "HTTP Error (400 Bad Request): <h1>Script timed out</h1>", err)
 }
 
@@ -208,7 +209,7 @@ func TestScriptError(t *testing.T) {
 
 	events := []types.FluentBitLog{}
 	filter := `error('some error')`
-	_, err := client.Run(events, filter)
+	_, err := client.Run(context.Background(), events, filter)
 	shouldError(t, "RPC call error: 21 (error loading script: [string \"fluentbit.lua\"]:1: some error)", err)
 }
 
@@ -231,7 +232,7 @@ func TestCallbackError(t *testing.T) {
     record.log = nil
     return code, i, record
   end`
-	result, err := client.Run(events, filter)
+	result, err := client.Run(context.Background(), events, filter)
 
 	if err != nil {
 		t.Error(err)
