@@ -2,35 +2,12 @@ package luasandbox_test
 
 import (
 	"context"
-	"reflect"
 	"testing"
 
+	"github.com/alecthomas/assert/v2"
 	"github.com/calyptia/api/types"
 	"github.com/calyptia/lua-sandbox-client"
 )
-
-func shouldError(t *testing.T, expected string, err error) {
-	if err == nil {
-		t.Errorf("Expected error: %v", expected)
-		return
-	}
-
-	if expected != err.Error() {
-		t.Errorf("Expected error: %v, got: %v", expected, err.Error())
-	}
-}
-
-func shouldEqual(t *testing.T, expected, actual []luasandbox.LogResult) {
-	if len(expected) != len(actual) {
-		t.Errorf("Slices have different lengths. Expected: %v, Actual: %v", len(expected), len(actual))
-	}
-
-	for i, v := range expected {
-		if !reflect.DeepEqual(v, actual[i]) {
-			t.Errorf("Log at index %v doesn't match. Expected: %v, Actual: %v", i, v, actual[i])
-		}
-	}
-}
 
 func getUrl() string {
 	return "http://localhost:5555/jsonrpc"
@@ -58,7 +35,7 @@ func TestSimpleProcessing(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	shouldEqual(t, []luasandbox.LogResult{
+	assert.Equal(t, []luasandbox.LogResult{
 		{Log: types.FluentBitLog{Timestamp: 11.5, Attrs: types.FluentBitLogAttrs{"msg": "record one", "processed": "one"}}},
 		{Log: types.FluentBitLog{Timestamp: 12.5, Attrs: types.FluentBitLogAttrs{"msg": "record two", "processed": "two"}}},
 		{Log: types.FluentBitLog{Timestamp: 13.5, Attrs: types.FluentBitLogAttrs{"msg": "record three", "processed": "three"}}},
@@ -85,7 +62,7 @@ func TestDropRecord(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	shouldEqual(t, []luasandbox.LogResult{
+  assert.Equal(t, []luasandbox.LogResult{
 		{Log: types.FluentBitLog{Timestamp: 0, Attrs: types.FluentBitLogAttrs{"msg": "record one", "processed": "one"}}},
 		{Log: types.FluentBitLog{Timestamp: 0, Attrs: types.FluentBitLogAttrs{"msg": "record three", "processed": "three"}}},
 	}, result)
@@ -115,7 +92,7 @@ func TestIgnoreTimestamp(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	shouldEqual(t, []luasandbox.LogResult{
+	assert.Equal(t, []luasandbox.LogResult{
 		{Log: types.FluentBitLog{Timestamp: 0, Attrs: types.FluentBitLogAttrs{"msg": "record one", "processed": "one"}}},
 		{Log: types.FluentBitLog{Timestamp: 12.5, Attrs: types.FluentBitLogAttrs{"msg": "record two", "processed": "two"}}},
 		{Log: types.FluentBitLog{Timestamp: 13.5, Attrs: types.FluentBitLogAttrs{"msg": "record three", "processed": "three"}}},
@@ -146,7 +123,7 @@ func TestIgnoreProcessing(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	shouldEqual(t, []luasandbox.LogResult{
+	assert.Equal(t, []luasandbox.LogResult{
 		{Log: types.FluentBitLog{Timestamp: 11.5, Attrs: types.FluentBitLogAttrs{"msg": "record one", "processed": "one"}}},
 		{Log: types.FluentBitLog{Timestamp: 0, Attrs: types.FluentBitLogAttrs{"log": "two"}}},
 		{Log: types.FluentBitLog{Timestamp: 0, Attrs: types.FluentBitLogAttrs{"log": "three"}}},
@@ -182,7 +159,7 @@ func TestSplit(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	shouldEqual(t, []luasandbox.LogResult{
+	assert.Equal(t, []luasandbox.LogResult{
 		{Log: types.FluentBitLog{Timestamp: 11.5, Attrs: types.FluentBitLogAttrs{"log": "one.1"}}},
 		{Log: types.FluentBitLog{Timestamp: 11.5, Attrs: types.FluentBitLogAttrs{"log": "one.2"}}},
 		{Log: types.FluentBitLog{Timestamp: 11.5, Attrs: types.FluentBitLogAttrs{"log": "one.3"}}},
@@ -201,7 +178,7 @@ func TestScriptTimeout(t *testing.T) {
   while true do
   end`
 	_, err := client.Run(context.Background(), events, filter)
-	shouldError(t, "HTTP Error (400 Bad Request): <h1>Script timed out</h1>", err)
+	assert.EqualError(t, err, "HTTP Error (400 Bad Request): <h1>Script timed out</h1>")
 }
 
 func TestScriptError(t *testing.T) {
@@ -210,7 +187,7 @@ func TestScriptError(t *testing.T) {
 	events := []types.FluentBitLog{}
 	filter := `error('some error')`
 	_, err := client.Run(context.Background(), events, filter)
-	shouldError(t, "RPC call error: 21 (error loading script: [string \"fluentbit.lua\"]:1: some error)", err)
+	assert.EqualError(t, err, "RPC call error: 21 (error loading script: [string \"fluentbit.lua\"]:1: some error)")
 }
 
 func TestCallbackError(t *testing.T) {
@@ -237,7 +214,7 @@ func TestCallbackError(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	shouldEqual(t, []luasandbox.LogResult{
+	assert.Equal(t, []luasandbox.LogResult{
 		{Error: "error processing event 1: [string \"fluentbit.lua\"]:6: error one"},
 		{Error: "error processing event 2: [string \"fluentbit.lua\"]:6: error two"},
 		{Log: types.FluentBitLog{Timestamp: 13.5, Attrs: types.FluentBitLogAttrs{"msg": "record three", "processed": "three"}}},
