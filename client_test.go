@@ -9,12 +9,12 @@ import (
 	luasandbox "github.com/calyptia/go-lua-sandbox-client"
 )
 
-func getUrl() string {
+func getURL() string {
 	return "http://localhost:5555/jsonrpc"
 }
 
 func TestSimpleProcessing(t *testing.T) {
-	client := luasandbox.New(getUrl())
+	client := luasandbox.New(getURL())
 
 	events := []types.FluentBitLog{
 		{Attrs: types.FluentBitLogAttrs{"log": "one"}},
@@ -43,7 +43,7 @@ func TestSimpleProcessing(t *testing.T) {
 }
 
 func TestDropRecord(t *testing.T) {
-	client := luasandbox.New(getUrl())
+	client := luasandbox.New(getURL())
 
 	events := []types.FluentBitLog{
 		{Attrs: types.FluentBitLogAttrs{"log": "one"}},
@@ -69,7 +69,7 @@ func TestDropRecord(t *testing.T) {
 }
 
 func TestIgnoreTimestamp(t *testing.T) {
-	client := luasandbox.New(getUrl())
+	client := luasandbox.New(getURL())
 
 	events := []types.FluentBitLog{
 		{Attrs: types.FluentBitLogAttrs{"log": "one"}},
@@ -100,7 +100,7 @@ func TestIgnoreTimestamp(t *testing.T) {
 }
 
 func TestIgnoreProcessing(t *testing.T) {
-	client := luasandbox.New(getUrl())
+	client := luasandbox.New(getURL())
 
 	events := []types.FluentBitLog{
 		{Attrs: types.FluentBitLogAttrs{"log": "one"}},
@@ -131,7 +131,7 @@ func TestIgnoreProcessing(t *testing.T) {
 }
 
 func TestSplit(t *testing.T) {
-	client := luasandbox.New(getUrl())
+	client := luasandbox.New(getURL())
 
 	events := []types.FluentBitLog{
 		{Attrs: types.FluentBitLogAttrs{"log": "one"}},
@@ -171,27 +171,27 @@ func TestSplit(t *testing.T) {
 }
 
 func TestScriptTimeout(t *testing.T) {
-	client := luasandbox.New(getUrl())
+	client := luasandbox.New(getURL())
 
 	events := []types.FluentBitLog{}
 	filter := `
   while true do
   end`
 	_, err := client.Run(context.Background(), events, filter)
-	assert.EqualError(t, err, "HTTP Error (400 Bad Request): <h1>Script timed out</h1>")
+	assert.EqualError(t, err, "unexpected status code 400: <h1>Script timed out</h1>")
 }
 
 func TestScriptError(t *testing.T) {
-	client := luasandbox.New(getUrl())
+	client := luasandbox.New(getURL())
 
 	events := []types.FluentBitLog{}
 	filter := `error('some error')`
 	_, err := client.Run(context.Background(), events, filter)
-	assert.EqualError(t, err, "RPC call error: 21 (error loading script: [string \"fluentbit.lua\"]:1: some error)")
+	assert.EqualError(t, err, "21: error loading script: [string \"fluentbit.lua\"]:1: some error")
 }
 
 func TestCallbackError(t *testing.T) {
-	client := luasandbox.New(getUrl())
+	client := luasandbox.New(getURL())
 
 	events := []types.FluentBitLog{
 		{Attrs: types.FluentBitLogAttrs{"log": "one"}},
@@ -210,7 +210,8 @@ func TestCallbackError(t *testing.T) {
     return code, i, record
   end`
 	_, err := client.Run(context.Background(), events, filter)
-	assert.EqualError(t, err, "Errors were raised processing one or more records:\n"+
-		"error processing event 1: [string \"fluentbit.lua\"]:6: error one\n"+
-		"error processing event 2: [string \"fluentbit.lua\"]:6: error two\n")
+	assert.EqualError(t, err, "2 errors occurred:\n"+
+		"\t* 0: error processing event 1: [string \"fluentbit.lua\"]:6: error one\n"+
+		"\t* 1: error processing event 2: [string \"fluentbit.lua\"]:6: error two\n"+
+		"\n")
 }

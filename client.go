@@ -4,41 +4,41 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"reflect"
-	"strings"
 	"time"
 
 	"github.com/calyptia/api/types"
+	"github.com/hashicorp/go-multierror"
 )
 
 type Client struct {
 	URL        string
-	HttpClient http.Client
-	nextId     int
+	HTTPClient http.Client
+	nextID     int
 }
 
 type params struct {
-	Events []types.FluentBitLogAttrs `json:"events"`
-	Filter string                    `json:"filter"`
+	Records []types.FluentBitLogAttrs `json:"events"`
+	Code    string                    `json:"filter"`
 }
 
 type request struct {
-	JsonRpcVersion string `json:"jsonrpc"`
+	JSONRPCVersion string `json:"jsonrpc"`
 	ID             int    `json:"id"`
 	Method         string `json:"method"`
 	Params         params `json:"params"`
 }
 
 type rawLogResult struct {
-	Result any    `json:"result,omitempty"`
-	Error  string `json:"error,omitempty"`
+	Result   any    `json:"result,omitempty"`
+	ErrorMsg string `json:"error,omitempty"`
 }
 
 type response struct {
-	JsonRpcVersion string         `json:"jsonrpc"`
+	JSONRPCVersion string         `json:"jsonrpc"`
 	ID             int            `json:"id"`
 	Result         []rawLogResult `json:"result,omitempty"`
 	Error          *rpcError      `json:"error,omitempty"`
@@ -52,8 +52,8 @@ type rpcError struct {
 func New(url string) *Client {
 	rv := &Client{
 		URL:    url,
-		nextId: 1,
-		HttpClient: http.Client{
+		nextID: 1,
+		HTTPClient: http.Client{
 			Transport: &http.Transport{
 				MaxIdleConns:       10,
 				IdleConnTimeout:    30 * time.Second,
@@ -65,36 +65,36 @@ func New(url string) *Client {
 	return rv
 }
 
-func (c *Client) Run(ctx context.Context, events []types.FluentBitLog, filter string) ([]types.FluentBitLog, error) {
-	id := c.nextId
-	c.nextId += 1
+func (c *Client) Run(ctx context.Context, records []types.FluentBitLog, code string) ([]types.FluentBitLog, error) {
+	id := c.nextID
+	c.nextID += 1
 
 	eventAttrs := []types.FluentBitLogAttrs{}
-	for _, e := range events {
+	for _, e := range records {
 		eventAttrs = append(eventAttrs, e.Attrs)
 	}
 
 	reqBody, err := json.Marshal(&request{
-		JsonRpcVersion: "2.0",
+		JSONRPCVersion: "2.0",
 		ID:             id,
 		Method:         "run",
 		Params: params{
-			Events: eventAttrs,
-			Filter: filter,
+			Records: eventAttrs,
+			Code:    code,
 		},
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.URL, bytes.NewReader(reqBody))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.URL, bytes.NewReader(reqBody))
 	if err != nil {
 		return nil, err
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	httpRes, err := c.HttpClient.Do(httpReq)
+	httpRes, err := c.HTTPClient.Do(httpReq)
 	if err != nil {
 		return nil, err
 	}
@@ -106,83 +106,104 @@ func (c *Client) Run(ctx context.Context, events []types.FluentBitLog, filter st
 	}
 
 	if httpRes.StatusCode >= 400 {
-		return nil, fmt.Errorf("HTTP Error (%v): %v", httpRes.Status, string(resBody))
+		return nil, fmt.Errorf("unexpected status code %d: %s", httpRes.StatusCode, string(resBody))
 	}
 
 	var response response
 	err = json.Unmarshal(resBody, &response)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to unmarshal json response: %v", string(resBody))
+		return nil, fmt.Errorf("json unmarshal response: %w", err)
 	}
 
 	if response.ID != id {
-		return nil, fmt.Errorf("Unexpected response id: %v", string(resBody))
+		return nil, fmt.Errorf("mismatch jsonrpc id %q", response.ID)
 	}
 
-	if response.JsonRpcVersion != "2.0" {
-		return nil, fmt.Errorf("Unexpected response RPC version: %v", string(resBody))
+	if response.JSONRPCVersion != "2.0" {
+		return nil, fmt.Errorf("unsupported jsonrpc version %q", response.JSONRPCVersion)
 	}
 
 	if response.Error != nil {
-		return nil, fmt.Errorf("RPC call error: %v (%v)", response.Error.Code, response.Error.Message)
+		return nil, fmt.Errorf("%d: %s", response.Error.Code, response.Error.Message)
 	}
 
-	rv := []types.FluentBitLog{}
-	var errors strings.Builder
-	for i, r := range response.Result {
-		if r.Error != "" {
-			errors.WriteString(fmt.Sprintf("%v\n", r.Error))
-			continue
+	var rv []types.FluentBitLog
+
+	processResult := func(i int, result rawLogResult) error {
+		if result.ErrorMsg != "" {
+			return errors.New(result.ErrorMsg)
 		}
 
-		resultItems := r.Result.([]any)
+		// lua code result should contain 3 items: code, timestamp, and record
+		resultItems := result.Result.([]any)
 		if len(resultItems) != 3 {
-			return nil, fmt.Errorf("RPC call returned unexpected result (wrong number of items)")
+			return fmt.Errorf("unexpected returned results length")
 		}
 
-		code := resultItems[0].(float64)
+		code, ok := resultItems[0].(float64)
+		if !ok {
+			return fmt.Errorf("unexpected return type for \"code\", got %T", resultItems[0])
+		}
+
 		if code == -1 {
 			// drop record
-			continue
+			return nil
 		}
 
 		if code == 0 {
 			// record not modified, use the original
-			rv = append(rv, events[i])
-			continue
+			rv = append(rv, records[i])
+			return nil
 		}
 
 		var timestamp types.FluentBitTime
 		if code == 2 {
 			// use the input timestamp
-			timestamp = events[i].Timestamp
+			timestamp = records[i].Timestamp
 		} else {
-			timestamp = types.FluentBitTime(resultItems[1].(float64))
-		}
-
-		attrs := resultItems[2]
-		if reflect.TypeOf(attrs).Kind() == reflect.Slice {
-			// split record
-			items := attrs.([]any)
-			for _, r := range items {
-				item := r.(map[string]any)
-				rv = append(rv, types.FluentBitLog{
-					Timestamp: timestamp,
-					Attrs:     item,
-				})
+			f, ok := resultItems[1].(float64)
+			if !ok {
+				return fmt.Errorf("unexpected return type for \"timestamp\", got %T", resultItems[1])
 			}
-			continue
+			timestamp = types.FluentBitTime(f)
 		}
 
-		rv = append(rv, types.FluentBitLog{
-			Timestamp: timestamp,
-			Attrs:     resultItems[2].(map[string]any),
-		})
+		add := func(v any) error {
+			attrs, ok := v.(map[string]any)
+			if !ok {
+				return fmt.Errorf("unexpected return type for \"record\", got %T", v)
+			}
+
+			rv = append(rv, types.FluentBitLog{
+				Timestamp: timestamp,
+				Attrs:     attrs,
+			})
+
+			return nil
+		}
+
+		// case were multiple records were returned as an array.
+		if rr, ok := resultItems[2].([]any); ok {
+			for _, r := range rr {
+				if err := add(r); err != nil {
+					return err
+				}
+			}
+		} else {
+			if err := add(resultItems[2]); err != nil {
+				return err
+			}
+		}
+
+		return nil
 	}
 
-	if errors.Len() > 0 {
-		return nil, fmt.Errorf("Errors were raised processing one or more records:\n%v", errors.String())
+	var errs error
+	for i, r := range response.Result {
+		if err := processResult(i, r); err != nil {
+			errs = multierror.Append(errs, IndexedError{Index: uint(i), Err: err})
+		}
 	}
 
-	return rv, nil
+	return rv, errs
 }
