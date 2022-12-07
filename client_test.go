@@ -6,7 +6,7 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/calyptia/api/types"
-	"github.com/calyptia/lua-sandbox-client"
+	luasandbox "github.com/calyptia/go-lua-sandbox-client"
 )
 
 func getUrl() string {
