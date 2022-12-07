@@ -10,8 +10,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/calyptia/api/types"
 	"github.com/hashicorp/go-multierror"
+
+	"github.com/calyptia/api/types"
 )
 
 type Client struct {

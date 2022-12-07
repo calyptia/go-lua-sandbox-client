@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
+
 	"github.com/calyptia/api/types"
 	luasandbox "github.com/calyptia/go-lua-sandbox-client"
 )
