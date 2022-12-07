@@ -1,4 +1,4 @@
-module github.com/calyptia/lua-sandbox-client
+module github.com/calyptia/go-lua-sandbox-client
 
 go 1.19
 
