@@ -21,9 +21,15 @@ type Client struct {
 	nextID     int
 }
 
+type event struct {
+	Timestamp types.FluentBitTime     `json:"timestamp"`
+	Record    types.FluentBitLogAttrs `json:"record"`
+	Tag       string                  `json:"tag"`
+}
+
 type params struct {
-	Records []types.FluentBitLogAttrs `json:"events"`
-	Code    string                    `json:"filter"`
+	Events []event `json:"events"`
+	Code   string  `json:"code"`
 }
 
 type request struct {
@@ -70,9 +76,13 @@ func (c *Client) Run(ctx context.Context, records []types.FluentBitLog, code str
 	id := c.nextID
 	c.nextID += 1
 
-	eventAttrs := []types.FluentBitLogAttrs{}
-	for _, e := range records {
-		eventAttrs = append(eventAttrs, e.Attrs)
+	events := []event{}
+	for _, r := range records {
+		events = append(events, event{
+			Record:    r.Attrs,
+			Timestamp: r.Timestamp,
+			Tag:       "my-tag",
+		})
 	}
 
 	reqBody, err := json.Marshal(&request{
@@ -80,8 +90,8 @@ func (c *Client) Run(ctx context.Context, records []types.FluentBitLog, code str
 		ID:             id,
 		Method:         "run",
 		Params: params{
-			Records: eventAttrs,
-			Code:    code,
+			Events: events,
+			Code:   code,
 		},
 	})
 	if err != nil {
